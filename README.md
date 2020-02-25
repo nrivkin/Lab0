@@ -1,0 +1,3 @@
+# Lab0
+
+Does the conversation I had with at least on of the teachers have? Nothing is written up yet...
