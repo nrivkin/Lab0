@@ -204,17 +204,14 @@ class Division:
 
         maxflow.solve(verbose=0, solver='cvxopt')
 
-        lim = 0.0
+        lim = 0
         tol = 1e-3
         for e in self.G.edges(-1):
             u, v = e
             lim += self.G[u][v]['capacity']
-        if (F + tol) < lim:
-            print(F + tol)
-            print(lim)
+        if int((F + tol)) < lim:
             return True
         else:
-            print("false")
             return False
 
     def checkTeam(self, team):
