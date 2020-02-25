@@ -92,9 +92,68 @@ class Division:
         '''
 
         saturated_edges = {}
+        count = 0
+        node_refs = dict()
+        target = self.teams[teamID]
 
-        #TODO: implement this
+        # create nodes for layer 1
+        ids = self.get_team_IDs()
+        layer1_nodes = set()
+        seen = set()
+        seen.add(teamID)
+        for id1 in ids:
+            if id1 != teamID:
+                seen.add(id1)
+                for id2 in ids:
+                    if id2 not in seen:
+                        layer1_nodes.add((id1, id2))
+                        node_refs[(id1, id2)] = count
+                        count += 1
 
+        # create nodes for layer 2
+        layer2_nodes = set()
+        for id in ids:
+            if id != teamID:
+                layer2_nodes.add(id)
+                node_refs[id] = count
+                count += 1
+        self.G.add_nodes_from(range(len(layer2_nodes) + len(layer1_nodes)))
+
+        # create source and sink
+        self.G.add_node(-1)
+        self.G.add_node(-2)
+        node_refs["source"] = -1
+        node_refs["sink"] = -2
+
+        # connect nodes
+        edges_from_source = set()
+        edges_to_sink = set()
+
+        for node in layer1_nodes:
+            id1, id2 = node
+            edges_from_source.add((node_refs["source"], node_refs[node]))
+            cap = self.teams[id1].get_against(id2)
+            saturated_edges[(id1, id2)] = cap
+            saturated_edges[(id2, id1)] = cap
+            self.G.add_edge(node_refs["source"], node_refs[node], capacity=cap)
+
+        for node in layer2_nodes:
+            edges_to_sink.add((node_refs[node], node_refs["sink"]))
+            t = self.teams[node]
+            cap = target.wins + target.remaining - t.wins
+            self.G.add_edge(node_refs[node], node_refs["sink"], capacity=cap)
+
+        for node in layer1_nodes:
+            id1, id2 = node
+            cap = self.teams[id1].get_against(id2)
+            self.G.add_edge(node_refs[node], node_refs[id1], capacity=cap)
+            self.G.add_edge(node_refs[node], node_refs[id2], capacity=cap)
+
+        # node_labels = dict()
+        # for ref in node_refs:
+        #     node_labels[ref] = node_refs[ref]
+        #
+        # nx.draw_networkx_labels(self.G, pos=nx.spring_layout(self.G), labels=node_labels)
         return saturated_edges
 
     def network_flows(self, saturated_edges):
@@ -108,7 +167,13 @@ class Division:
         return: True if team is eliminated, False otherwise
         '''
 
-        #TODO: implement this
+        m_flow = nx.maximum_flow(self.G, -1, -2)
+        lim = 0
+        for e in self.G.edges(-1):
+            u, v = e
+            lim += self.G[u][v]['capacity']
+        if m_flow[0] < lim:
+            return True
 
         return False
 
@@ -124,12 +189,33 @@ class Division:
         returns True if team is eliminated, False otherwise
         '''
 
-        maxflow=pic.Problem()
+        maxflow = pic.Problem()
 
-        #TODO: implement this
+        f = {}
+        for e in self.G.edges():
+            f[e] = maxflow.add_variable('f[{0}]'.format(e), 1)
 
-        return False
+        F = maxflow.add_variable('F', 1)
 
+        maxflow.add_constraint(pic.flow_Constraint(
+            self.G, f, source=-1, sink=-2, capacity='capacity', flow_value=F, graphName='G'))
+
+        maxflow.set_objective('max', F)
+
+        maxflow.solve(verbose=0, solver='cvxopt')
+
+        lim = 0.0
+        tol = 1e-3
+        for e in self.G.edges(-1):
+            u, v = e
+            lim += self.G[u][v]['capacity']
+        if (F + tol) < lim:
+            print(F + tol)
+            print(lim)
+            return True
+        else:
+            print("false")
+            return False
 
     def checkTeam(self, team):
         '''Checks that the team actually exists in this division.
